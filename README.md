@@ -5,43 +5,43 @@ Renders HTML elements using PHP.
 ```php
 use JMasci\HtmlElement as El;
 
-El::get( 'div', 'Some content...', [
+echo El::get( 'div', 'Some content...', [
     'class' => 'container',
 ] );
 ```
 
-Will return a string of HTML:
+Prints:
 
 ```html
 <div class="container">Some content...</div>
 ```
 
-This will do the same thing:
+Does the same thing:
 
 ```php
-El::get( 'div.container', 'Some content...', [] );
+echo El::get( 'div.container', 'Some content...', [] );
 ```
 
-This will add 2 classes to the container:
+Specify classes in 2 places (both classes are used)
 
 ```php
-El::get( 'div.container', 'Some content...', [
+echo El::get( 'div.container', 'Some content...', [
     'class' => 'other-class'
 ] );
 ```
 
-The "class" attribute can also be an array like this:
+Class attribute as array:
 
 ```php
-El::get( 'div.container', 'Some content...', [
+echo El::get( 'div.container', 'Some content...', [
     'class' => [ 'other-class', 'other-class-2' ]
 ] );
 ```
 
-Or an array like this:
+Class attribute as array (alternate):
 
 ```php
-El::get( 'div.container', 'Some content...', [
+echo El::get( 'div.container', 'Some content...', [
     'class' => [
         'other-class' => true,
         'not-this-class' => false,
@@ -50,46 +50,92 @@ El::get( 'div.container', 'Some content...', [
 ] );
 ```
 
-In some cases you'll want to only open the tag so you don't have to pass the inner HTML to the function. (set
-4th parameter to false; its true by default). 
+All attributes are valid (not just classes...):
 
 ```php
-El::get( 'form', '', [ 'action' => '...', 'method' => '...' ], false );
+// self-closing tag can be called with just the open method
+echo El::open( 'input', [
+    'type' => 'number',
+    'id' => $name,
+    'name' => $name,        
+    'class' => [ 'class-1', $class_2 ? 'class-2' : '' ],    
+    'min' => 0, 
+    'max' => 99,
+    'step' => 1,
+    'data-location' => $location_id,
+    'data-json' => El::json_encode_for_html_attr( $data ),
+    // this will print just <input.... required> (todo: might re-think how we do this)    
+    'required' => true,
+] );
+```
+
+Demonstration of why El might be useful to you in the first place, if your code is structured like this:
+
+```php
+// input is a self-closing tag, we can just open it.
+echo El::open( 'input', $form->fields->field_name->build_element_attributes( $form_rendering_context, [
+    'class' => 'js-mask-type-1'
+] ) );
+```
+
+Open the tag only (the harder way):
+
+```php
+echo El::get( 'form', '', [ 'action' => '...', 'method' => '...' ], false );
 echo 'inner html...';
 echo '</form>';
 ```
 
-But, there's also an El::open() method to do the same thing...
+The easier way:
 
 ```php
-El::open( 'form', [ 'action' => '...', 'method' => '...' ] );
+echo El::open( 'form', [ 'action' => '...', 'method' => '...' ] );
 echo 'inner html...';
 echo El::close( 'form' );
 ```
 
-El::get() will validate and sanitize the tagname and all attributes and then call El::strict().
-
 El::get() will:
 
+- Validate and sanitize the tag name and all attributes.
 - Allow the tag to contain classes and/or an ID in string "selector" format.
 - Allow $atts['class'] and $atts ['style'] to be an array (todo: styles array)
-- JSON encode other attributes when they are passed as arrays or objects (todo: would this be a potential security 
-risk? If you accidentally provided a user object instead of a user ID then we'll silently just go ahead and print the 
-entire user, which is unlike the behaviour if you tried to print an object as a string. I may change this.)
+- (todo: currently, JSON encodes objects/arrays for attributes other than class/style, but, I believe 
+this to be a security concern and plan on changing it).
 
-El::get_strict() will not sanitize or validate any of the data you pass in. It expects that:
-- The tag is a valid HTML tag only.
-- The attributes array is an array of scalar values (no arrays or objects for any reasons).
-- The tag name and all attributes must be properly sanitized.
+### El::get_strict()
 
-For these reasons, many of the the methods that El::get() uses to filter and validate your input
-are also available publicly to you. You may want to use some of them in combination with El::get_strict().
+El::get_strict() expects all input to be in the correct format and will not sanitize or validate anything
+that you pass in. It expects:
+
+- The tag is a valid (and/or sanitized) HTML tag. No classes or ID.
+- The attributes array is an array of scalar values. No arrays or objects.
+- All attribute names AND values are properly sanitized.
+
+Note: El::get() will validate your data and then call El::get_strict(). Many of the methods
+that El::get() uses to validate your data are also available publicly to you. You may want to
+use a subset of them if you decide to use El::get_strict().
+
+Why use El::get_strict() at all then?
+
+- Long story short: El::get() may over sanitize your data. I may look into this more and provide a more specific answer. 
+- Todo: I may allow developers to override the default sanitation method(s) to set them up specifically
+for your environment. 
+- Todo: another possibility is to let the caller specify which attributes should not be sanitized
+in El::get().
+- However, I don't plan on removing El::get_strict() even if the above solutions are implemented.
+
+### El::get_strict() example
 
 ```php
-El::get_strict( 'div', '', [ 
-    'user_id' => (int) $user->get( 'id' ),
-    'data-something' => esc_attr( $some_user_input_or_something ), 
-    'class' => 'user-info', 
-    'style' => 'display: none;'
-], false );
+echo El::get_strict( 'div', '<p>Inner...</p>', [    
+    'class' => El::parse_classes( [
+        'user-wrapper' => true,        
+        'logged-in' => true,
+        'is-admin' => $user->is_admin(),
+    ]),
+    'style' => 'display: none;',
+    'data-user' => (int) $user->get( 'id' ),
+    'data-something' => esc_attr( $some_user_input_or_something ),     
+    'data-preferences' => El::json_encode_for_html_attr( $preferences ),    
+] );
 ```
