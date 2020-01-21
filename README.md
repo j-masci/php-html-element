@@ -51,12 +51,20 @@ El::get( 'div.container', 'Some content...', [
 ```
 
 In some cases you'll want to only open the tag so you don't have to pass the inner HTML to the function. (set
-4th parameter to false; its true by default).
+4th parameter to false; its true by default). 
 
 ```php
 El::get( 'form', '', [ 'action' => '...', 'method' => '...' ], false );
 echo 'inner html...';
 echo '</form>';
+```
+
+But, there's also an El::open() method to do the same thing...
+
+```php
+El::open( 'form', [ 'action' => '...', 'method' => '...' ] );
+echo 'inner html...';
+echo El::close( 'form' );
 ```
 
 El::get() will validate and sanitize the tagname and all attributes and then call El::strict().

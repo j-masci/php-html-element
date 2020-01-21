@@ -112,6 +112,41 @@ Class HtmlElement{
     }
 
     /**
+     * @param $tag
+     * @param $atts
+     * @return string
+     */
+    public static function open( $tag, $atts ) {
+        return self::get( $tag, "", $atts, false );
+    }
+
+    /**
+     * @param $tag
+     * @param $atts
+     * @return string
+     */
+    public static function open_strict( $tag, $atts ) {
+        return self::get_strict( $tag, "", $atts, false );
+    }
+
+    /**
+     * Seems redundant, but, we have self::open, so...
+     *
+     * @param $tag
+     * @return string
+     */
+    public static function close( $tag ) {
+
+        $_tag = self::sanitize_tag( $tag );
+
+        if ( self::$do_self_closing_tags && self::is_self_closing( $_tag ) ) {
+            return "";
+        }
+
+        return "</$_tag>";
+    }
+
+    /**
      * ie. "div.container.whatever#id' => [ 'div', 'id', 'container whatever' ]
      *
      * Supports HTML tag, classes, and ID. Does not support data-attributes etc.
