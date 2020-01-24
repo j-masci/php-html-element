@@ -1,5 +1,6 @@
 {
     "name": "jmasci/html-element",
+    "description": "Renders HTML elements from PHP",
     "type": "library",
     "authors": [
         {
@@ -7,5 +8,10 @@
             "email": "masci.joel@gmail.com"
         }
     ],
+    "autoload" : {
+        "psr-4": {
+            "JMasci\\HtmlElement\\": ""
+        }
+    },
     "require": {}
 }

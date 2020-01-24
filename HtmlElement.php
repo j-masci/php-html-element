@@ -1,6 +1,6 @@
 <?php
 
-namespace JMasci;
+namespace JMasci\HtmlElement;
 
 /**
  * Methods for rendering HTML elements (@see self::get(), self::get_strict())
@@ -8,7 +8,7 @@ namespace JMasci;
  * Class HtmlElement
  * @package JMasci
  */
-Class HtmlElement{
+Class El{
 
     /**
      * When true, does <img />

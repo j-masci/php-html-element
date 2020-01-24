@@ -3,7 +3,7 @@ Renders HTML elements using PHP.
 ### Usage
 
 ```php
-use JMasci\HtmlElement as El;
+use JMasci\HtmlElement\El;
 
 echo El::get( 'div', 'Some content...', [
     'class' => 'container',
