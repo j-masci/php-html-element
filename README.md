@@ -1,4 +1,6 @@
-Renders HTML elements using PHP. 
+Renders HTML elements using PHP.
+
+todo: Readme doesn't cover 2 newly added classes, Element and ElementAttribute 
 
 ### Usage
 

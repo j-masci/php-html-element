@@ -3,7 +3,9 @@
 namespace JMasci\HtmlElement;
 
 /**
- * Methods for rendering HTML elements (@see self::get(), self::get_strict())
+ * Pure static methods for rendering HTML elements (@see self::get(), self::get_strict())
+ *
+ * Not to be confused with Element which is a mutable object.
  *
  * Class HtmlElement
  * @package JMasci
