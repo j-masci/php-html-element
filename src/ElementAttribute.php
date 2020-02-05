@@ -241,7 +241,7 @@ Class ElementAttribute{
      */
     public function add( ...$args ){
         if ( $this->callback_exists( 'add' ) ) {
-            $this->_call( 'add', ...$args );
+            $this->_call_dynamic_method( 'add', ...$args );
         }
     }
 
@@ -255,7 +255,7 @@ Class ElementAttribute{
      */
     public function remove( ...$args ){
         if ( $this->callback_exists( 'remove' ) ) {
-            return $this->_call( 'remove', ...$args );
+            return $this->_call_dynamic_method( 'remove', ...$args );
         }
     }
 
@@ -269,7 +269,7 @@ Class ElementAttribute{
      */
     public function has( ...$args ){
         if ( $this->callback_exists( 'has' ) ) {
-            return $this->_call( 'has', ...$args );
+            return $this->_call_dynamic_method( 'has', ...$args );
         }
     }
 
@@ -281,7 +281,7 @@ Class ElementAttribute{
      */
     public function set( ...$args ){
         // Required callback. Let it fail if it does not exist.
-        return $this->_call( 'set', ...$args );
+        return $this->_call_dynamic_method( 'set', ...$args );
     }
 
     /**
@@ -291,7 +291,7 @@ Class ElementAttribute{
      */
     public function get(){
         // Required callback. Let it fail if it does not exist.
-        return $this->_call( 'get' );
+        return $this->_call_dynamic_method( 'get' );
     }
 
     /**
@@ -322,11 +322,33 @@ Class ElementAttribute{
      * @param mixed ...$args
      * @return mixed
      */
-    public function _call( $name, ...$args ){
+    public function _call_dynamic_method( $name, ...$args ){
 
         // We check $this->callback_exists() in some cases, before $this->_call().
         // If we get to here and the method is not defined, let it fail.
         \Closure::bind( $this->methods[$name], $this );
         return call_user_func( $this->methods[$name], ...$args );
+    }
+
+    /**
+     * Magic method call is designed for dynamic "methods" registered
+     * to attributes with names that we cannot predict.
+     *
+     * For the sake of auto completion, we manually defined
+     * set, get, add, remove, has. But if your attribute has
+     * something else, then implementing this magic method allows
+     * you to call that method directly on the object.
+     *
+     * @param $method
+     * @param $args
+     * @return mixed
+     */
+    public function __call( $method, $args ) {
+
+        if ( $this->callback_exists( $method ) ) {
+            return $this->_call_dynamic_method( $method, ...$args );
+        }
+
+        throw new Exception( "Method or dynamic method does not exist" );
     }
 }

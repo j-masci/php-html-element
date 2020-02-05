@@ -1,143 +1,273 @@
-Renders HTML elements using PHP.
+HTML rendering lib split into two (almost) non-coupled parts:
 
-todo: Readme doesn't cover 2 newly added classes, Element and ElementAttribute 
+The El class provides pure methods to convert element properties to HTML. You can use this 
+on it's own.
 
-### Usage
+The Element class manages element properties and then uses El for rendering. You can easily
+substitute your own rendering mechanism. 
+
+### 1. The El class
+
+Basic Usage:
 
 ```php
 use JMasci\HtmlElement\El;
 
-echo El::get( 'div', 'Some content...', [
-    'class' => 'container',
+echo El::get( 'p', "inner", [
+    'class' => 'class-1',    
 ] );
 ```
-
-Prints:
 
 ```html
-<div class="container">Some content...</div>
+<p class="class-1">...</p>
 ```
 
-Does the same thing:
+Demonstration of El::open, tags defining classes/id, and classes as a list:
 
 ```php
-echo El::get( 'div.container', 'Some content...', [] );
-```
-
-Specify classes in 2 places (both classes are used)
-
-```php
-echo El::get( 'div.container', 'Some content...', [
-    'class' => 'other-class'
+echo El::open( 'div.class-1#id', [
+    'class' => [ 'class-2', 0 ? 'class-3' : '' ]
 ] );
+echo "inner";
+echo El::close( 'div' );
 ```
 
-Class attribute as array:
-
-```php
-echo El::get( 'div.container', 'Some content...', [
-    'class' => [ 'other-class', 'other-class-2' ]
-] );
+```html
+<div id="id" class="class-1 class-2">inner</div>
 ```
 
-Class attribute as array (alternate):
+Self closing tags, classes as a dictionary of boolean values, json encoding helper, and key-only attributes (ie. required):
 
 ```php
-echo El::get( 'div.container', 'Some content...', [
-    'class' => [
-        'other-class' => true,
-        'not-this-class' => false,
-        'other-class-2' => true
-    ]   
-] );
-```
-
-All attributes are valid (not just classes...):
-
-```php
-// self-closing tag can be called with just the open method
 echo El::open( 'input', [
     'type' => 'number',
-    'id' => $name,
-    'name' => $name,        
-    'class' => [ 'class-1', $class_2 ? 'class-2' : '' ],    
-    'min' => 0, 
-    'max' => 99,
-    'step' => 1,
-    'data-location' => $location_id,
-    'data-json' => El::json_encode_for_html_attr( $data ),
-    // this will print just <input.... required> (todo: might re-think how we do this)    
+    'name' => 'number',            
+    'class' => [ 'class-1' => true, 'class-2' => false ],    
+    'min' => 0,    
+    'step' => 1,    
+    'data-json' => El::json_encode_for_html_attr( $some_array_or_object ),        
     'required' => true,
 ] );
 ```
 
-Demonstration of why El might be useful to you in the first place, if your code is structured like this:
-
-```php
-// input is a self-closing tag, we can just open it.
-echo El::open( 'input', $form->fields->field_name->build_element_attributes( $form_rendering_context, [
-    'class' => 'js-mask-type-1'
-] ) );
+```html
+<input type="number" name="number" class="class-1" min="0" step="1" data-location="{json...}" required />
 ```
 
-Open the tag only (the harder way):
+#### User Input / Sanitation / Extensibility
+
+El::get() and El::open() will filter, validate, and sanitize all data that you pass in (except the inner HTML).
+
+There is also El::get_strict() and El::open_strict() which does none of the above. It expects that:
+- all data is sanitized
+- all attributes are strings.
+- the tag is a valid tag and does not contain an ID or classes
+
+The methods for filtering/validating/sanitizing your data are also available to you. You can use
+a subset of them and wrap the "strict" methods to define your own solution to better suit your needs. 
+You may find this useful if your data is otherwise sanitized in a way that you do not prefer. Extending
+the class is also possible. See the code for more info; it was built with extensibility in mind.
+
+### 1. The Element class
+
+Basic usage
 
 ```php
-echo El::get( 'form', '', [ 'action' => '...', 'method' => '...' ], false );
-echo 'inner html...';
-echo '</form>';
-```
+use JMasci\HtmlElement\Element;
 
-The easier way:
-
-```php
-echo El::open( 'form', [ 'action' => '...', 'method' => '...' ] );
-echo 'inner html...';
-echo El::close( 'form' );
-```
-
-El::get() will:
-
-- Validate and sanitize the tag name and all attributes.
-- Allow the tag to contain classes and/or an ID in string "selector" format.
-- Allow $atts['class'] and $atts ['style'] to be an array (todo: styles array)
-- (todo: currently, JSON encodes objects/arrays for attributes other than class/style, but, I believe 
-this to be a security concern and plan on changing it).
-
-### El::get_strict()
-
-El::get_strict() expects all input to be in the correct format and will not sanitize or validate anything
-that you pass in. It expects:
-
-- The tag is a valid (and/or sanitized) HTML tag. No classes or ID.
-- The attributes array is an array of scalar values. No arrays or objects.
-- All attribute names AND values are properly sanitized.
-
-Note: El::get() will validate your data and then call El::get_strict(). Many of the methods
-that El::get() uses to validate your data are also available publicly to you. You may want to
-use a subset of them if you decide to use El::get_strict().
-
-Why use El::get_strict() at all then?
-
-- Long story short: El::get() may over sanitize your data. I may look into this more and provide a more specific answer. 
-- Todo: I may allow developers to override the default sanitation method(s) to set them up specifically
-for your environment. 
-- Todo: another possibility is to let the caller specify which attributes should not be sanitized
-in El::get().
-- However, I don't plan on removing El::get_strict() even if the above solutions are implemented.
-
-### El::get_strict() example
-
-```php
-echo El::get_strict( 'div', '<p>Inner...</p>', [    
-    'class' => El::parse_classes( [
-        'user-wrapper' => true,        
-        'logged-in' => true,
-        'is-admin' => $user->is_admin(),
-    ]),
-    'style' => 'display: none;',
-    'data-user' => (int) $user->get( 'id' ),
-    'data-something' => esc_attr( $some_user_input_or_something ),     
-    'data-preferences' => El::json_encode_for_html_attr( $preferences ),    
+$element = new Element( 'div', [ 'class' => 'container' ], [
+    new Element( 'p', [], [
+        "Text"
+    ] )
 ] );
+
+echo $element->render();
+```
+
+```html
+<div class="container"><p>Text</p></div>
+```
+
+Non-basic Usage. Demonstrates most of the available methods but not all; see the code for more info.
+
+```php
+use JMasci\HtmlElement\Element;
+
+$element = new Element( null );
+
+// set methods normally return $element
+$element->tag_set( 'div' )->attr_set( 'id', 'main' );
+
+$element->attr_get( 'id' ); # "main"
+$element->tag_get(); # "div"
+$element->attr_exists( 'data-test' ); # false
+$element->attr_set( 'data-test' );
+$element->attr_reset( 'data-test' );
+$element->attr_exists( 'data-test' ); # true
+$element->attr_delete( 'data-test' );
+$element->attr_exists( 'data-test' ); # false
+
+// all methods are potentially variadic. add_class may accept multiple
+// parameters or arrays.
+$element->add_class( 'class-1' )->add_class( 'class-2' );
+$element->has_class( 'class-1' ); # true
+$element->remove_class( 'class-2' );
+$element->attr_get( 'class' ); # "class-1"
+
+// different attributes know how to handle different operations.
+// the id attribute does not understand "add". The style attribute does.
+$element->add_style('display: none;');
+
+// there are many ways to do the same thing. This is not a feature,
+// but a result of the extensibility that is built-in. You should
+// generally avoid using these methods unless you know what you are doing.
+// mostly, you'll use them when extending the class to add your own functionality.
+$element->_compound_attr_add( 'style', 'color: red;');
+$element->attr_get_instance( 'style' )->add( 'color: blue;' );
+$element->attr_get_instance( 'style' )->_call_dynamic_method( 'add', 'color: green;' );
+
+// this will result in an error, unless you extended the 'id' attribute to define 'has'. 
+// $element->attr_get_instance( 'id' )->_call_dynamic_method( 'has', '...' );
+
+// adding child elements. note: nesting depth of children is unlimited.
+$element->child_append( new Element('p', [], [ "Paragraph 1" ] ));
+
+// stores a string as a child. It is not converted into an Element.
+$element->child_append( "<p>Paragraph 2</p>");
+
+// prepend a child
+$element->child_prepend( new Element('p', [], [ "Paragraph 0" ] ));
+
+// a "fragment" contains only children.
+// we created a new element containing 2 children which are the same.
+// note: $element is not cloned, its a reference. Considering cloning if needed.
+$fragment = Element::get_fragment_instance( [ $element, $element ] );
+$fragment->child_prepend( '<p>Before...</p>' );
+echo $fragment->render();
+```
+
+Results in:
+
+```html
+<p>Before...</p>
+<div id="main" class="class-1" style="display: none; color: red; color:blue; color: green;">
+    <p>Paragraph 0</p>
+    <p>Paragraph 1</p>
+    <p>Paragraph 2</p>
+</div>
+<div id="main" class="class-1" style="display: none; color: red; color:blue; color: green;">
+    <p>Paragraph 0</p>
+    <p>Paragraph 1</p>
+    <p>Paragraph 2</p>
+</div>
+```
+
+### Real World Example
+
+Note: I'm not recommending that you always use Element to write HTML; doing so may result
+in spaghetti code.
+
+However, there are some cases where the lack of flexibility is just not an option. So, we
+can trade a bit of simplicity for a lot of flexibility.
+
+```php
+use JMasci\HtmlElement\Element;
+
+// a function that returns Element instances and a function that knows how to render them.
+// this lets the Element's be modified before rendering. You can use the same idea
+// in a lot of different ways.
+function get_the_thing(){
+    
+    $wrapper = new Element( 'div', [ 'class' => 'wrapper' ] );
+    $container = new Element( 'div', [ 'class' => 'container' ] );    
+
+    $render = function( $wrapper, $container ){
+        ob_start();                        
+        echo $wrapper->open_tag();
+        echo $container->open_tag();
+        echo '...';
+        echo $container->close_tag();    
+        echo $wrapper->close_tag();        
+        // this would have the same effect
+        // echo $wrapper->append_child( $container->append_child( "..." )->render();
+        return ob_get_clean();                    
+    };
+    
+    return [ $wrapper, $container, $render ];
+}
+
+list( $wrapper, $container, $render ) = get_the_thing();
+
+$wrapper->add_class( 'wide-wrapper' );
+
+$container->before( "<h1>Above Container Title</h1>");
+
+echo $render( $wrapper, $container );
+```
+```html
+<div class="wrapper wide-wrapper">
+    <h1>Above Container Title</h1>
+    <div class="container">...</div>
+</div>
+```
+
+### Limitations / Not Supported
+
+You'll notice many methods look similar to those found in jQuery. While you can update all of the
+elements properties, you cannot query for element's children.
+
+For example, there is no $element->querySelector( 'input[name="first_name"]' ). While this is certainly
+possible to implement, I don't plan on doing this as of now.
+
+Also, there is no way to create an Element instance from a string of HTML. This process is not a simple one.
+
+### ElementAttribute / Extensibility 
+
+Every Element contains an array of ElementAttribute instances.
+
+ElementAttribute's have overridable anonymous functions for accessing their values.
+
+For example, the 'class' attribute defines 'get', 'set', 'add', 'remove', 'has'.
+
+The style attribute (by default) defines 'get', 'set', 'add'.
+
+All other attributes use the default instance (but you can change this). The default
+instance only defines 'set' and 'get'.
+
+Note: The dynamic 'get' method should always return a scalar value. It is invoked
+during rendering. 
+
+Also, all dynamic methods can accept a variable number of parameters.
+
+In general, it's hard to know which attributes define which dynamic methods. And it's hard
+to know the accepted parameters for those dynamic methods. This is not ideal, but it's a 
+necessary trade-off for flexibility. To deal with this fact, you can extend ElementBaseClass
+or Element to create your own well-defined wrapper methods.
+
+```php
+use JMasci\HtmlElement\Element;
+use JMasci\HtmlElement\ElementAttribute;
+
+Class MyElement extends Element{
+    
+    // override this to modify attribute instances
+    protected function build_attribute_instance($name){
+    
+        $attr = parent::build_attribute_instance( $name );        
+        
+        // define your own 'remove' method on the 'style' attribute.
+        if ( $name === 'style' ) {
+            $attr->methods['remove'] = function( ...$args ) {
+                // note: "$this" will be the ElementAttribute instance.                               
+            };                          
+        }
+               
+        return $attr;    
+    }
+}
+
+$e = new MyElement( 'p' );
+
+// "style" now understands "remove"
+$e->attr_get_instance( 'style' )->_call_dynamic_method( 'remove', 'display' );
 ```
