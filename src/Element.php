@@ -3,7 +3,18 @@
 namespace JMasci\HtmlElement;
 
 /**
- * TODO: INCOMPLETE
+ * An HTML element object, containing a tag, attributes, and children.
+ *
+ * Build and mutate the object as needed, and then call ->render().
+ *
+ * children can contain strings or other instances.
+ *
+ * Instances can also be fragments, which, generally have just
+ * children and no attributes or tag.
+ *
+ * The process of turning attributes and a tag into HTML is not
+ * the concern of this class. It hands off that work to another
+ * class. @see Element::open_tag(), @see Element::close_tag()
  *
  * Class Element
  * @package JMasci\HtmlElement
@@ -24,8 +35,6 @@ Class Element{
     /**
      * An array of ElementAttribute instances, indexed by
      * the attribute name (ie. 'class', 'id', 'type').
-     *
-     * todo: instances also store the name. which name is the single source of truth?
      *
      * @var ElementAttribute[] array
      */
@@ -62,101 +71,6 @@ Class Element{
     }
 
     /**
-     * todo: this is somewhat experimental. I need to put some thought into how we handle object references.
-     *
-     * Inserts an element before this element, causing "this" to now be a fragment. The pointer
-     * to the new self which was copied as a child element is now lost, although, technically
-     * exists in $this->children[1].
-     *
-     * The thing to consider is if we do $this->before( $new )->add_class(), what are
-     * we adding the class to, the new fragment or the previous self which is now a
-     * child of the fragment?
-     *
-     * todo: make public if we decide to use this
-     *
-     * @param $new_ele
-     * @return $this
-     */
-    private function before( $new_ele ){
-
-        $this->children = [
-            $new_ele,
-            new Element( $this->tag, $this->atts, $this->children )
-        ];
-
-        // order matters
-        $this->tag = null;
-        $this->atts = [];
-        return $this;
-    }
-
-    /**
-     * @return bool
-     */
-    public function is_fragment(){
-        return empty( $this->tag ) && empty( $this->atts );
-    }
-
-    /**
-     * @param array $atts
-     * @return array
-     */
-    protected static function get_atts_array( array $atts ) {
-        return array_map( function( $att ){
-            if ( is_scalar( $att ) ) {
-                return $att;
-            } else {
-                // letting it fail for now if $att is an array or something
-                return $att->call( 'get' );
-            }
-        }, $atts );
-    }
-
-    /**
-     * @param array $children
-     * @return false|string
-     */
-    protected static function render_children( array $children ){
-
-        ob_start();
-
-        // todo: "\r\n" and all that shit? Doing so could break non-html string children
-        foreach ( $children as $child ){
-
-            // storing children as strings of HTML is fine
-            if ( is_scalar( $child ) ) {
-                echo $child;
-            } else {
-                // recursive call.
-                // if $child does not have a render method, letting it fail.
-                echo $child->render();
-            }
-        }
-
-        return ob_get_clean();
-    }
-
-    /**
-     * Now for the fun part...
-     *
-     * ok that was easier than I thought.
-     */
-    public function render(){
-        if ( $this->is_fragment() ) {
-            return static::render_children( $this->children );
-        } else {
-            return El::get( $this->tag, static::render_children( $this->children ), self::get_atts_array( $this->atts ), true );
-        }
-    }
-
-    /**
-     * Empties the inner contents of the element.
-     */
-    public function empty(){
-        $this->children = [];
-    }
-
-    /**
      * Returns an instance of self that has no tag or attributes, just
      * children. Supporting fragments will no doubt make some operations
      * a bit harder, but I think its still good.
@@ -164,8 +78,136 @@ Class Element{
      * @param array $children
      * @return static
      */
-    public static function fragment( array $children ){
+    public static function get_fragment_instance( array $children ){
         return new static( null, [], $children );
+    }
+
+    /**
+     * True when $this does not have a tag.
+     *
+     * Normally, if we don't have a tag, it means we also don't have
+     * attributes.
+     *
+     * A "fragment" renders only its children, as adjacent HTML tags.
+     *
+     * ie. <p></p><p></p>
+     *
+     * @return bool
+     */
+    public function is_fragment(){
+        return empty( trim( $this->tag ) );
+    }
+
+    /**
+     * Generates and returns an HTML string.
+     *
+     * Feel free to only use $this->open_tag() and $this->close_tag() if
+     * you want to write the inner HTMl separately.
+     *
+     * @return string
+     */
+    public function render(){
+
+        $op = '';
+
+        if ( ! $this->is_fragment() ) {
+            $op .= $this->open_tag();
+        }
+
+        // can recursively invoke $this->render() on elements of $this->children
+        $op .= $this->inner_html();
+
+        if ( ! $this->is_fragment() ) {
+            $op .= $this->close_tag();
+        }
+
+        return $op;
+    }
+
+    /**
+     * Render the HTML inside the tag (or the entirety of a fragment) by
+     * rendering each one of $this->children.
+     *
+     * $this->children is (should be) an array consisting of only scalar
+     * values and instances of self.
+     *
+     * @return false|string
+     */
+    public function inner_html(){
+
+        ob_start();
+
+        // todo: "\r\n" and all that shit? Doing so could break non-html string children
+        foreach ( $this->children as $child ){
+
+            // storing children as strings of HTML is fine
+            if ( is_scalar( $child ) ) {
+                echo $child;
+            } else if ( method_exists( $child, 'render' ) ){
+                // likely a recursive call
+                echo $child->render();
+            } else {
+                // I guess a no-op here.
+            }
+        }
+
+        return ob_get_clean();
+    }
+
+    /**
+     * Returns the opened HTML tag unless this is a fragment.
+     *
+     * @return string
+     */
+    public function open_tag(){
+        if ( ! $this->is_fragment() ) {
+            return El::open( $this->tag, $this->compile_attributes_array() );
+        }
+    }
+
+    /**
+     * Returns the closed HTML tag unless this is a fragment.
+     *
+     * Should return nothing if $this->tag is a self closing tag, like 'img' or 'br'.
+     *
+     * @return string
+     */
+    public function close_tag(){
+        if ( ! $this->is_fragment() ) {
+            return El::close( $this->tag );
+        }
+    }
+
+    /**
+     * Converts an array of attribute instances into an
+     * array of scalar values, still indexed by attribute name.
+     *
+     * 2 subtle but important things are accomplished in the process:
+     *
+     * 1. Attribute names stored in the keys of $this->atts are the single source of
+     * truth. (normally, $attr_name === $this->atts[$attr_name]->get_name())
+     *
+     * 2. We call $this->attr_get(), not $this->atts[$attr_name]->get(). Normally,
+     * these have the same result, but they might not if Element is extended.
+     *
+     * @return array
+     */
+    public function compile_attributes_array(){
+
+        $ret = [];
+
+        foreach ( $this->atts as $name => $value ) {
+            $ret[$name] = $this->attr_get( $name );
+        }
+
+        return $ret;
+    }
+
+    /**
+     * Empties the inner contents of the element.
+     */
+    public function empty(){
+        $this->children = [];
     }
 
     /**
@@ -187,6 +229,81 @@ Class Element{
     }
 
     /**
+     * Inserts an element after this one.
+     *
+     * $this becomes a fragment in the process, with (at least) 2 children, one of them
+     * being a copy of the old $this.
+     *
+     * @see self::before()
+     *
+     * @param $new_ele
+     * @return $this
+     */
+    public function after( $new_ele ){
+
+        if ( $this->is_fragment() ) {
+            $this->child_append( $new_ele );
+        } else {
+
+            // must do children first.
+            $this->children = [
+                new Element( $this->tag, $this->atts, $this->children ),
+                $new_ele,
+            ];
+
+            // turn into fragment, after children operations.
+            $this->tag = null;
+            $this->atts = [];
+        }
+
+        return $this;
+    }
+
+    /**
+     * todo: methods 'before' and 'after' should both be evaluated for efficacy.
+     *
+     * Inserts an element before this one, mutating and returning $this (the returned
+     * value is not a reference to a new object).
+     *
+     * As a result, $this becomes a fragment. Meaning that you should no longer be updating
+     * the attributes of $this. If you need to modify $this while prepending another element,
+     * you can use $this->get_fragment_instance() to keep a reference to the original
+     * object which can still be modified.
+     *
+     * In jQuery, .before() will insert a new domNode and then return the domNode it was
+     * called upon, so you can do ele.before().addClass() and that's fine. In our case,
+     * there is no DOM, and there is nowhere to put the new element except in $this->children,
+     * and the only (logical) way to ensure that the new element is adjacent to $this is
+     * to make a copy of $this in $this->children as well, which is why $this becomes
+     * a fragment.
+     *
+     * @param $new_ele
+     * @return $this
+     */
+    public function before( $new_ele ){
+
+        // todo: is this behaviour on fragments robust?
+        if ( $this->is_fragment() ) {
+            $this->child_prepend( $new_ele );
+        } else {
+
+            // must do children first.
+            $this->children = [
+                $new_ele,
+                new Element( $this->tag, $this->atts, $this->children )
+            ];
+
+            // turn into fragment, after children operations.
+            $this->tag = null;
+
+            // todo: refs to atts remaining in $this->children[1]->atts ???? is this going to cause issues?
+            $this->atts = [];
+        }
+
+        return $this;
+    }
+
+    /**
      * Gets the attribute instance, creating it if it does not already exist.
      *
      * @param $name
@@ -197,7 +314,21 @@ Class Element{
     }
 
     /**
-     * You could override this in your subclass.
+     * You can manually set attribute instances but normally you won't
+     * need to do this. Use $this->attr_set() to set the attributes value.
+     *
+     * @param ElementAttribute $attr
+     * @param null $name
+     */
+    public function attr_set_instance( ElementAttribute $attr, $name = null ){
+        $_name = $name !== null ? $name : $attr->get_name();
+        $this->atts[$_name] = $attr;
+    }
+
+    /**
+     * Builds an attribute instance via name. Overriding this method
+     * in a subclass is one way to change the behaviour of attribute
+     * instances.
      *
      * @param $name
      * @return mixed
@@ -227,7 +358,7 @@ Class Element{
      * @return mixed
      */
     public function attr_get( $name ){
-        return $this->attr_get_instance( $name )->call( 'get' );
+        return $this->attr_get_instance( $name )->get();
     }
 
     /**
@@ -237,10 +368,11 @@ Class Element{
      *
      * @param $name
      * @param mixed ...$args
-     * @return mixed
+     * @return $this
      */
     public function attr_set( $name, ...$args ){
-        return $this->attr_get_instance( $name )->call( 'set',  ...$args );
+        $this->attr_get_instance( $name )->set( ...$args );
+        return $this;
     }
 
     /**
@@ -301,105 +433,82 @@ Class Element{
      * an 'add' method, which is a scenario likely to not occur, but
      * I don't want to prevent the possibility.
      *
+     * @see self::add_class(), self::add_style()
+     *
      * @param $name
      * @param mixed ...$args
+     * @return $this
      */
     public function compound_attr_add( $name, ...$args ){
-        $this->attr_get_instance( $name )->call( 'add', ...$args );
+        $this->attr_get_instance( $name )->add( ...$args );
+        return $this;
     }
 
     /**
      * Ie. remove class.
      *
-     * @see self::compound_attr_add()
+     * @see self::remove_class()
      *
      * @param $name
      * @param mixed ...$args
+     * @return $this
      */
-    public function compound_attr_remove( $name, ...$args ){
-        $this->attr_get_instance( $name )->call( 'remove', ...$args );
+    public function _compound_attr_remove( $name, ...$args ){
+        // note: attr->remove() may return bool for whether or not the thing
+        // was removed. we're returning $this instead to support fluent.
+        $this->attr_get_instance( $name )->remove( ...$args );
+        return $this;
     }
 
     /**
-     * Ie. has class.
+     * Ie. has class
      *
-     * @see self::compound_attr_add()
+     * @see self::has_class()
      *
      * @param $name
      * @param mixed ...$args
+     * @return bool|null|mixed
      */
-    public function compound_attr_has( $name, ...$args ){
-        $this->attr_get_instance( $name )->call( 'has', ...$args );
+    public function _compound_attr_has( $name, ...$args ){
+        return $this->attr_get_instance( $name )->has( ...$args );
     }
 
     /**
      * Add a class to the list of classes.
      *
-     * todo: it seems redundant to have both this method and the method which it wraps.
-     *
      * @param mixed ...$args
+     * @return $this
      */
     public function add_class( ...$args ) {
-        $this->attr_get_instance( 'class' )->call( 'add', ...$args );
+        return $this->compound_attr_add( 'class', ...$args );
     }
 
     /**
      * Remove a class from the list of classes.
      *
      * @param mixed ...$args
+     * @return $this
      */
     public function remove_class( ...$args ) {
-        $this->compound_attr_remove( 'class', ...$args );
+        return $this->_compound_attr_remove( 'class', ...$args );
     }
 
     /**
+     * Checks it the class list contains a class.
+     *
      * @param mixed ...$args
+     * @return bool|mixed|null
      */
     public function has_class( ...$args ) {
-        $this->compound_attr_has( 'class', ...$args );
+        return $this->_compound_attr_has( 'class', ...$args );
     }
 
     /**
+     * Add style(s)
+     *
      * @param mixed ...$args
      */
     public function add_style( ...$args ){
         $this->compound_attr_add( 'style', ...$args );
     }
 }
-
-
-/**
- * Interface is useless to us due to method arguments which
- * often are variadic but we should not force anyone to use
- * them as such. There is no reason why attr_set should not
- * be able to accept just ( $name, $value ) in the function
- * declaration.
- *
- * todo: remove this if we're sure we'll never use it.
- *
- * Interface ElementInterface
- * @package JMasci\HtmlElement
- */
-//Interface ElementInterface{
-//
-//    function tag_get();
-//    function tag_set( $value );
-//
-//    function attr_get( $name );
-//    function attr_set( $name, ...$args );
-//
-//    function attr_delete( $name ); # ie. <input> vs. attr_delete_value
-//    function attr_reset( $name ); # ie. <input name="">
-//
-//    function attr_exists( $name ); # true if <input name="">
-//
-//    function compound_attr_add( $name, ...$args );
-//    function compound_attr_remove( $name, ...$args );
-//    function compound_attr_has( $name, ...$args );
-//
-//    function add_class( ...$args );
-//    function remove_class( ...$args );
-//    function has_class( ...$args );
-//
-//    function add_style( ...$args );
-//}
