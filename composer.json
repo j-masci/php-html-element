@@ -1,6 +1,6 @@
 {
     "name": "jmasci/html-element",
-    "description": "Renders HTML elements from PHP",
+    "description": "Pure html element rendering functions; and a mutable html element object.",
     "type": "library",
     "authors": [
         {
@@ -13,5 +13,13 @@
             "JMasci\\HtmlElement\\": "src/"
         }
     },
-    "require": {}
+    "require": {},
+    "require-dev": {
+        "phpunit/phpunit": "4.*"
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "JMasci\\HtmlElement\\Tests\\": "tests/"
+        }
+    }
 }

@@ -10,7 +10,7 @@ namespace JMasci\HtmlElement;
  * Class HtmlElement
  * @package JMasci
  */
-Class El{
+Class El {
 
     /**
      * When true, does <img />
@@ -44,7 +44,7 @@ Class El{
      * @param bool $close - whether or not to close the tag
      * @return string
      */
-    public static function get( $tag, $inner = '', array $atts = [], $close = true ){
+    public static function get( $tag, $inner = '', array $atts = [], $close = true ) {
 
         list( $tag, $id, $class ) = self::parse_tag_selector( $tag );
 
@@ -52,7 +52,7 @@ Class El{
         self::merge_attribute( 'id', $id, $atts );
 
         foreach ( $atts as $attr_name => $attr_value ) {
-            $atts[self::sanitize_attribute_name( $attr_name )] = self::parse_attribute_value( $attr_name, $attr_value );
+            $atts[ self::sanitize_attribute_name( $attr_name ) ] = self::parse_attribute_value( $attr_name, $attr_value );
         }
 
         return self::get_strict( self::sanitize_tag( $tag ), self::parse_inner_html( $inner ), $atts, $close );
@@ -81,7 +81,7 @@ Class El{
      * @param bool $close
      * @return string
      */
-    public static function get_strict($tag, $inner = '', array $atts = [], $close = true ) {
+    public static function get_strict( $tag, $inner = '', array $atts = [], $close = true ) {
 
         $self_closing = static::$do_self_closing_tags && self::is_self_closing( $tag );
 
@@ -96,8 +96,11 @@ Class El{
             }
         }
 
-        // add all attributes, with "singles" like required/checked at the end
-        $el .= trim( " " . implode( " ", $pairs + $singles ) );
+        $atts_string = implode( " ", $pairs + $singles );
+
+        if ( $atts_string ) {
+            $el .= " " . $atts_string;
+        }
 
         // close the opening tag
         $el .= $self_closing ? " />" : ">";
@@ -118,7 +121,8 @@ Class El{
      * @param $atts
      * @return string
      */
-    public static function open( $tag, $atts ) {
+    public static function open( $tag, $atts = [] ) {
+
         return self::get( $tag, "", $atts, false );
     }
 
@@ -128,6 +132,7 @@ Class El{
      * @return string
      */
     public static function open_strict( $tag, $atts ) {
+
         return self::get_strict( $tag, "", $atts, false );
     }
 
@@ -156,17 +161,65 @@ Class El{
      * @param $tag
      * @return array
      */
-    public static function parse_tag_selector( $tag ){
+    public static function parse_tag_selector( $tag ) {
 
-        // todo: regex is not implement yet because its hard.
+        list( $tag, $class ) = self::parse_tag_and_classes( $tag );
+        list( $tag, $id ) = self::parse_tag_and_id( $tag );
+        return [ $tag, $id, $class ];
+    }
+
+    /**
+     * Ie. "div.class-1.class-2" => [ "div", "class-1 class-2" ]
+     *
+     * @param $tag
+     * @return array
+     */
+    public static function parse_tag_and_classes( $tag ) {
+
+        if ( strpos( $tag, "." ) === false ) {
+            return [ $tag, "" ];
+        }
+
         $class = "";
-        $id = "";
 
-        return[
-            $tag,
-            $id,
-            $class,
-        ];
+        // one . up to and including anything except another . or #
+        $tag_without_classes = preg_replace_callback( '/[.]{1,}[^.#]{0,}/i', function ( $matches ) use ( &$class ) {
+
+            // is stfu necessary? I don't know how the callback will be triggered if there is no matches.
+            $class .= " " . str_replace( ".", "", @$matches[0] );
+
+            return "";
+
+        }, $tag );
+
+        return [ $tag_without_classes, trim( $class ) ];
+    }
+
+    /**
+     * ie. "div.class-1#the-id.class-2" => [ "div.class-1.class-2", "the-id" ]
+     *
+     * @param $tag
+     * @return array
+     */
+    public static function parse_tag_and_id( $tag ) {
+
+        if ( strpos( $tag, "#" ) === false ) {
+            return [ $tag, "" ];
+        }
+
+        $first_id = "";
+
+        $tag_without_id = preg_replace_callback( '/[#]{1,}[^.#]{0,}/i', function ( $matches ) use ( &$first_id ) {
+
+            if ( ! $first_id ) {
+                $first_id = str_replace( "#", "", @$matches[ 0 ] );
+            }
+
+            return "";
+
+        }, $tag );
+
+        return [ $tag_without_id, $first_id ];
     }
 
     /**
@@ -183,7 +236,7 @@ Class El{
      * @param array|string $class
      * @return string
      */
-    public static function parse_classes($class ) {
+    public static function parse_classes( $class ) {
 
         if ( is_array( $class ) ) {
 
@@ -193,7 +246,7 @@ Class El{
 
                 if ( $v && is_string( $k ) && $k ) {
                     $arr[] = self::parse_classes( $k );
-                } else if( $v ){
+                } else if ( $v ) {
                     $arr[] = self::parse_classes( $v );
                 }
             }
@@ -219,7 +272,7 @@ Class El{
      */
     public static function parse_attribute_value( $name, $value ) {
 
-        switch( strtolower( $name ) ) {
+        switch ( strtolower( $name ) ) {
             case 'class':
                 return self::parse_classes( $value );
                 break;
@@ -238,7 +291,7 @@ Class El{
 
                 if ( is_array( $value ) || is_object( $value ) ) {
                     return self::json_encode_for_html_attr( $value );
-                } else if ( is_bool( $value ) || is_null( $value ) || is_int( $value ) ){
+                } else if ( is_bool( $value ) || is_null( $value ) || is_int( $value ) ) {
                     // have to be careful not to break certain types. this is very important
                     // for singular attribute values like required/checked.
                     return $value;
@@ -264,7 +317,7 @@ Class El{
      * @param $inner
      * @return string
      */
-    protected static function parse_inner_html( $inner ){
+    protected static function parse_inner_html( $inner ) {
 
         $ret = '';
 
@@ -312,21 +365,21 @@ Class El{
      * @param $value - ie. 'class_1' or [ 'class_1' ]
      * @param array $atts - ie. [ 'class' => 'class_2', 'id' => 'id123' ]
      */
-    public static function merge_attribute($name, $value, array &$atts = [] ){
+    public static function merge_attribute( $name, $value, array &$atts = [] ) {
 
-        switch( $name ) {
+        switch ( $name ) {
             case 'class':
 
                 // this gets pretty ugly but I guess this is just what we have to do.
                 if ( $value ) {
-                    if ( isset( $atts['class'] ) ) {
-                        if ( is_array( $atts['class'] ) ) {
-                            $atts['class'][] = $value;
+                    if ( isset( $atts[ 'class' ] ) ) {
+                        if ( is_array( $atts[ 'class' ] ) ) {
+                            $atts[ 'class' ][] = $value;
                         } else {
-                            $atts['class'] .= trim( " " . self::parse_classes( $value ) );
+                            $atts[ 'class' ] .= trim( " " . self::parse_classes( $value ) );
                         }
                     } else {
-                        $atts['class'] = $value;
+                        $atts[ 'class' ] = $value;
                     }
                 }
 
@@ -341,8 +394,8 @@ Class El{
 
                 // override $atts only if $attribute_value exists and $atts[$attribute_name] does not.
                 if ( $value ) {
-                    if ( ! isset( $atts[$name] ) || ! $atts[$name] ) {
-                        $atts[$name] = $value;
+                    if ( ! isset( $atts[ $name ] ) || ! $atts[ $name ] ) {
+                        $atts[ $name ] = $value;
                     }
                 }
 
@@ -357,6 +410,7 @@ Class El{
      * @return string
      */
     public static function sanitize_tag( $tag ) {
+
         return preg_replace( "/[^A-Za-z]/", "", $tag );
     }
 
@@ -369,7 +423,8 @@ Class El{
      * @param $class
      * @return string
      */
-    public static function sanitize_class_str($class ) {
+    public static function sanitize_class_str( $class ) {
+
         return preg_replace( "/[^A-Za-z0-9_\-\s]/", "", $class );
     }
 
@@ -381,6 +436,7 @@ Class El{
      * @return string
      */
     public static function sanitize_attribute_name( $name ) {
+
         return preg_replace( "/[^A-Za-z0-9_\-]/", "", $name );
     }
 
@@ -389,8 +445,9 @@ Class El{
      * @return bool
      */
     public static function is_self_closing( $tag ) {
+
         // todo: maybe make this a static var or check for other self closing tags
-        return in_array( $tag, [ 'input','img','hr','br','meta','link' ] );
+        return in_array( $tag, [ 'input', 'img', 'hr', 'br', 'meta', 'link' ] );
     }
 
     /**
@@ -400,6 +457,7 @@ Class El{
      * @return string
      */
     public static function json_encode_for_html_attr( $thing ) {
+
         return htmlspecialchars( \json_encode( $thing ), ENT_QUOTES, 'UTF-8' );
     }
 }
